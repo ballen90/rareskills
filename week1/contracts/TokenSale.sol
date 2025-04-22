@@ -9,15 +9,17 @@ contract TokenSale is Ownable {
     uint256 public pricePerToken;  // Initial price of the token (in wei)
     uint256 public totalTokensSold;
     uint256 public totalTokensForSale;
+    uint256 public releaseTime; // The time when funds can be withdrawn or refunded
     
     event TokensBought(address indexed buyer, uint256 amount, uint256 totalCost);
     event TokensSold(address indexed seller, uint256 amount, uint256 totalReceived);
     event SaleEnded(uint256 totalTokensSold);
 
-    constructor(IERC20 _token, uint256 _initialPrice, uint256 _totalTokensForSale) {
+    constructor(IERC20 _token, uint256 _initialPrice, uint256 _totalTokensForSale, uint256 _releaseTime) Ownable(msg.sender) {
         token = _token;
         pricePerToken = _initialPrice;
         totalTokensForSale = _totalTokensForSale;
+        releaseTime = _releaseTime; // Set the release time at contract deployment
     }
 
     // Public function to buy tokens
@@ -26,6 +28,7 @@ contract TokenSale is Ownable {
         require(totalTokensSold + _amount <= totalTokensForSale, "Not enough tokens left for sale");
         
         uint256 totalCost = getTokenPrice(_amount);
+        
         require(msg.value >= totalCost, "Insufficient funds sent");
 
         totalTokensSold += _amount;
@@ -57,11 +60,20 @@ contract TokenSale is Ownable {
 
     // Function for the owner to withdraw the funds raised during the sale
     function withdrawFunds() external onlyOwner {
+        require(block.timestamp >= releaseTime, "Release time has not passed yet");
         payable(owner()).transfer(address(this).balance);
     }
 
     // Function to allow the owner to adjust the price per token (optional)
     function setPricePerToken(uint256 _newPrice) external onlyOwner {
         pricePerToken = _newPrice;
+    }
+
+    // Refund function (buyer can request refund before release time)
+    function refund() external {
+        require(block.timestamp < releaseTime, "Release time has passed");
+        uint256 amountToRefund = totalTokensSold;
+        totalTokensSold = 0; // Prevent re-entrancy issues
+        token.transfer(msg.sender, amountToRefund);
     }
 }
