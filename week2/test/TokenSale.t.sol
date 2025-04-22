@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
-import "../TokenSale.sol"; // Adjust the import path as needed
+import "../contracts/TokenSale.sol"; // Adjust the import path as needed
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
