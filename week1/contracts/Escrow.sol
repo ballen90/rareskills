@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract Escrow is ReentrancyGuard, Ownable {
@@ -22,7 +22,7 @@ contract Escrow is ReentrancyGuard, Ownable {
     event Refund(address indexed buyer, uint256 amount);
 
     // Constructor to initialize the contract with the token and seller
-    constructor(IERC20 _token, address _seller) {
+    constructor(IERC20 _token, address _seller) Ownable(msg.sender) {
         token = _token;
         seller = _seller;
     }
