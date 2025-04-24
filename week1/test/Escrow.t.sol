@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "../contracts/Escrow.sol"; // Adjust path based on your project structure
+import "../contracts/Escrow.sol";
 
 // Mock ERC20 Token
 contract MockERC20 is ERC20 {
@@ -20,7 +20,7 @@ contract EscrowTest is Test {
     address public buyer;
     address public seller;
     address public owner;
-    uint256 public amountToDeposit = 1000 * 10**18;  // Example token amount to deposit
+    uint256 public amountToDeposit = 1000 * 10 ** 18; // Example token amount to deposit
     uint256 public escrowPeriod = 3 days;
 
     function setUp() public {

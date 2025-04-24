@@ -3,19 +3,22 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "forge-std/console.sol";
 
 contract TokenSale is Ownable {
     IERC20 public token;
-    uint256 public pricePerToken;  // Initial price of the token (in wei)
+    uint256 public pricePerToken; // Initial price of the token (in wei)
     uint256 public totalTokensSold;
     uint256 public totalTokensForSale;
     uint256 public releaseTime; // The time when funds can be withdrawn or refunded
-    
+
     event TokensBought(address indexed buyer, uint256 amount, uint256 totalCost);
     event TokensSold(address indexed seller, uint256 amount, uint256 totalReceived);
     event SaleEnded(uint256 totalTokensSold);
 
-    constructor(IERC20 _token, uint256 _initialPrice, uint256 _totalTokensForSale, uint256 _releaseTime) Ownable(msg.sender) {
+    constructor(IERC20 _token, uint256 _initialPrice, uint256 _totalTokensForSale, uint256 _releaseTime)
+        Ownable(msg.sender)
+    {
         token = _token;
         pricePerToken = _initialPrice;
         totalTokensForSale = _totalTokensForSale;
@@ -26,13 +29,18 @@ contract TokenSale is Ownable {
     function buyTokens(uint256 _amount) external payable {
         require(_amount > 0, "Amount must be greater than 0");
         require(totalTokensSold + _amount <= totalTokensForSale, "Not enough tokens left for sale");
-        
+
         uint256 totalCost = getTokenPrice(_amount);
-        
+
+        // Add this inside the TokenSale contract's buyTokens function
+        console.log("Received ether: %d", msg.value);
+        console.log("Total cost for %d tokens: %d", _amount, totalCost);
+
+
         require(msg.value >= totalCost, "Insufficient funds sent");
 
         totalTokensSold += _amount;
-        pricePerToken += _amount * 0.01 ether;  // Price increases by 0.01 ETH per token bought
+        pricePerToken += _amount * 0.01 ether; // Price increases by 0.01 ETH per token bought
 
         token.transfer(msg.sender, _amount);
 

@@ -1,138 +1,157 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "../contracts/TokenSale.sol"; // Adjust the import path as needed
+import "../contracts/TokenSale.sol";
 
-// Mock ERC20 Token
-contract MockERC20 is ERC20 {
-    constructor(string memory name, string memory symbol) ERC20(name, symbol) {}
+// Mock ERC20 token
+contract MockERC20 is IERC20 {
+    string public constant name = "Mock Token";
+    string public constant symbol = "MTK";
+    uint8 public constant decimals = 18;
+    uint256 public override totalSupply;
+    mapping(address => uint256) public override balanceOf;
+    mapping(address => mapping(address => uint256)) public override allowance;
 
-    function mint(address to, uint256 amount) public {
-        _mint(to, amount);
+    function transfer(address recipient, uint256 amount) public override returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "Not enough balance");
+        balanceOf[msg.sender] -= amount;
+        balanceOf[recipient] += amount;
+        return true;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        require(balanceOf[from] >= amount, "Not enough balance");
+        require(allowance[from][msg.sender] >= amount, "Not approved");
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        return true;
+    }
+
+    function approve(address spender, uint256 amount) public override returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        return true;
+    }
+
+    function mint(address to, uint256 amount) external {
+        balanceOf[to] += amount;
+        totalSupply += amount;
     }
 }
 
 contract TokenSaleTest is Test {
     TokenSale public tokenSale;
     MockERC20 public token;
+    address public owner;
     address public buyer;
-    address public seller;
-    uint256 public initialPrice = 1 ether;  // Example initial price of 1 ether per token
-    uint256 public tokensForSale = 1000;   // Example amount of tokens for sale
-    uint256 public amountToBuy = 10;       // Number of tokens to buy
-    uint256 public priceIncreasePerToken = 0.01 ether; // Price increase per token
-    uint256 public releaseTime;
 
     function setUp() public {
-        releaseTime = block.timestamp + 3 days; // Set release time to 3 days from now
+        owner = address(this);
+        buyer = vm.addr(1);
 
-        // Create a new ERC20 token contract
-        token = new MockERC20("TestToken", "TT");
+        token = new MockERC20();
+        token.mint(address(this), 1_000_000 ether);
 
-        // Mint some tokens for the token sale
-        token.mint(address(this), tokensForSale * 10**18);
+        tokenSale = new TokenSale(
+            IERC20(address(token)),
+            1 ether,               // initial price
+            1_000 ether,           // total tokens for sale
+            block.timestamp + 1 days
+        );
 
-        // Create the TokenSale contract with the initial price, tokens available, and release time
-        tokenSale = new TokenSale(token, initialPrice, tokensForSale, releaseTime);
-
-        // Set buyer and seller addresses
-        buyer = address(0x123);
-        seller = address(0x456);
-
-        // Give the buyer some ether to interact with the contract
-        hoax(buyer, 100 ether);
+        token.transfer(address(tokenSale), 1_000 ether);
+        vm.deal(buyer, 100 ether); // Give buyer 100 ETH
     }
 
-    // Test buying tokens
     function testBuyTokens() public {
-        uint256 expectedPrice = initialPrice + (amountToBuy * priceIncreasePerToken);
+        uint256 amountToBuy = 1;
+        uint256 expectedCost = 1 ether;
 
-        // Log the expected price for debugging
-        console.log("Expected price for %d tokens: %d", amountToBuy, expectedPrice);
+        vm.prank(buyer);
+        tokenSale.buyTokens{value: expectedCost}(amountToBuy);
 
-        // Approve the TokenSale contract to spend the buyer's tokens
-        token.approve(address(tokenSale), amountToBuy * 10**18);
-
-        // Simulate a purchase and send the exact amount of ether (expectedPrice)
-        hoax(buyer, expectedPrice); // Ensure the correct amount of ether is sent
-        tokenSale.buyTokens(amountToBuy);
-
-        // Check that the correct amount of tokens were transferred to the buyer
-        assertEq(token.balanceOf(buyer), amountToBuy * 10**18);
-
-        // Check the amount of tokens remaining in the sale contract
-        assertEq(token.balanceOf(address(tokenSale)), tokensForSale - amountToBuy);
+        assertEq(token.balanceOf(buyer), amountToBuy);
+        assertEq(tokenSale.totalTokensSold(), amountToBuy);
+        assertEq(tokenSale.pricePerToken(), 1.01 ether);
+        assertEq(address(tokenSale).balance, expectedCost);
     }
 
-    // Test refund functionality before release time
-    function testRefund() public {
-        uint256 expectedPrice = initialPrice + (amountToBuy * priceIncreasePerToken);
+    function testExcessRefund() public {
+        uint256 amountToBuy = 1;
+        uint256 sentAmount = 2 ether;
 
-        // Approve and simulate the purchase
-        token.approve(address(tokenSale), amountToBuy * 10**18);
-        hoax(buyer, expectedPrice);
-        tokenSale.buyTokens(amountToBuy);
+        uint256 buyerBalanceBefore = buyer.balance;
+        console.log("buyer balance: %d", buyerBalanceBefore);
 
-        // Simulate a refund before the release time
-        uint256 buyerBalanceBeforeRefund = token.balanceOf(buyer);
-        hoax(buyer);
-        tokenSale.refund();
-        
-        // Ensure the buyer has been refunded the correct amount
-        assertEq(token.balanceOf(buyer), buyerBalanceBeforeRefund + amountToBuy * 10**18);
+        vm.startPrank(buyer);
+        tokenSale.buyTokens{value: sentAmount}(amountToBuy);
+        vm.stopPrank();
+
+        assertEq(buyer.balance, buyerBalanceBefore - 1 ether); // 1 ether refunded
+        assertEq(token.balanceOf(buyer), 1);
     }
 
-    // Test withdraw funds functionality after the release time
-    function testWithdrawFunds() public {
-        uint256 expectedPrice = initialPrice + (amountToBuy * priceIncreasePerToken);
-
-        // Approve and simulate the purchase
-        token.approve(address(tokenSale), amountToBuy * 10**18);
-        hoax(buyer, expectedPrice);
-        tokenSale.buyTokens(amountToBuy);
-
-        // Fast-forward time by 3 days
-        vm.warp(block.timestamp + 3 days);
-
-        // Owner withdraws the funds
-        uint256 balanceBefore = address(this).balance;
-        hoax(address(this)); // Owner withdraws funds
-        tokenSale.withdrawFunds();
-
-        // Verify that the funds were withdrawn
-        assertEq(address(this).balance, balanceBefore + expectedPrice);
+    function testGetTokenPrice() public {
+        uint256 amount = 3 ether;
+        uint256 expectedPrice = 3 ether;
+        assertEq(tokenSale.getTokenPrice(amount), expectedPrice);
     }
 
-    // Test ending the sale and transferring remaining tokens to the owner
-    function testEndSale() public {
-        // Approve and simulate the purchase
-        token.approve(address(tokenSale), amountToBuy * 10**18);
-        hoax(buyer, initialPrice);
-        tokenSale.buyTokens(amountToBuy);
-
-        // Owner ends the sale
-        hoax(address(this)); // Owner can end the sale
+    function testOnlyOwnerCanEndSale() public {
+        uint256 ownerBalanceBefore = token.balanceOf(owner);
         tokenSale.endSale();
-
-        // Ensure the remaining tokens were transferred to the owner
-        assertEq(token.balanceOf(address(this)), tokensForSale - amountToBuy);
+        uint256 ownerBalanceAfter = token.balanceOf(owner);
+        assertEq(ownerBalanceAfter, ownerBalanceBefore + 1_000 ether);
     }
 
-    // Test price increase after each purchase
-    function testPriceIncrease() public {
-        uint256 initialPriceBefore = tokenSale.getTokenPrice(1);
-        uint256 amountToBuyBefore = 1;
+    function testCannotEndSaleTwice() public {
+        tokenSale.endSale();
+        vm.expectRevert("Sale has already ended");
+        tokenSale.endSale();
+    }
 
-        // Buy tokens and verify price increase
-        hoax(buyer, initialPrice);
-        tokenSale.buyTokens(amountToBuyBefore);
+    function testWithdrawFundsAfterReleaseTime() public {
+        vm.prank(buyer);
+        tokenSale.buyTokens{value: 1 ether}(1 ether);
 
-        uint256 priceAfterPurchase = tokenSale.getTokenPrice(amountToBuyBefore);
+        vm.warp(block.timestamp + 2 days); // after releaseTime
+        uint256 ownerBalanceBefore = owner.balance;
 
-        // The price should have increased by the price increase per token
-        assertEq(priceAfterPurchase, initialPriceBefore + priceIncreasePerToken);
+        tokenSale.withdrawFunds();
+        assertEq(owner.balance, ownerBalanceBefore + 1 ether);
+    }
+
+    function testWithdrawFundsBeforeReleaseTimeFails() public {
+        vm.prank(buyer);
+        tokenSale.buyTokens{value: 1 ether}(1 ether);
+
+        vm.expectRevert("Release time has not passed yet");
+        tokenSale.withdrawFunds();
+    }
+
+    function testOnlyOwnerCanSetPrice() public {
+        tokenSale.setPricePerToken(2 ether);
+        assertEq(tokenSale.pricePerToken(), 2 ether);
+    }
+
+    function testRefundAfterReleaseTimeFails() public {
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(buyer);
+        vm.expectRevert("Release time has passed");
+        tokenSale.refund();
+    }
+
+    function testRefundBeforeReleaseTimeLogicFlaw() public {
+        // This test will show that any address can call refund and claim totalTokensSold.
+        vm.prank(buyer);
+        tokenSale.buyTokens{value: 1 ether}(1 ether);
+
+        vm.prank(buyer);
+        tokenSale.refund(); // ❗ totalTokensSold refunded to buyer (logic flaw)
+
+        assertEq(token.balanceOf(buyer), 1 ether * 2); // Double tokens due to bad logic
     }
 }

@@ -50,7 +50,7 @@ contract Escrow is ReentrancyGuard, Ownable {
 
         // Transfer the tokens to the seller
         uint256 withdrawalAmount = amount;
-        amount = 0;  // Prevent reentrancy attacks by resetting the amount
+        amount = 0; // Prevent reentrancy attacks by resetting the amount
         bool success = token.transfer(seller, withdrawalAmount);
         require(success, "Token transfer failed");
 
@@ -64,7 +64,7 @@ contract Escrow is ReentrancyGuard, Ownable {
 
         // Refund the tokens to the buyer
         uint256 refundAmount = amount;
-        amount = 0;  // Prevent reentrancy attacks by resetting the amount
+        amount = 0; // Prevent reentrancy attacks by resetting the amount
         bool success = token.transfer(buyer, refundAmount);
         require(success, "Token transfer failed");
 

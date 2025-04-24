@@ -10,11 +10,10 @@ contract SanctionedToken is ERC20, Ownable {
     event AddressBanned(address indexed user);
     event AddressUnbanned(address indexed user);
 
-    constructor(
-        string memory name,
-        string memory symbol,
-        uint256 initialSupply
-    ) ERC20(name, symbol) Ownable(msg.sender) {
+    constructor(string memory name, string memory symbol, uint256 initialSupply)
+        ERC20(name, symbol)
+        Ownable(msg.sender)
+    {
         _mint(msg.sender, initialSupply);
     }
 
@@ -37,4 +36,3 @@ contract SanctionedToken is ERC20, Ownable {
         super._update(from, to, value);
     }
 }
-
