@@ -11,6 +11,9 @@ contract TokenSale is Ownable {
     uint256 public totalTokensSold;
     uint256 public totalTokensForSale;
     uint256 public releaseTime; // The time when funds can be withdrawn or refunded
+    
+    mapping(address => uint256) public purchases; // Track individual purchases
+    mapping(address => uint256) public payments; // Track payments made by buyers
 
     event TokensBought(address indexed buyer, uint256 amount, uint256 totalCost);
     event TokensSold(address indexed seller, uint256 amount, uint256 totalReceived);
@@ -36,11 +39,12 @@ contract TokenSale is Ownable {
         console.log("Received ether: %d", msg.value);
         console.log("Total cost for %d tokens: %d", _amount, totalCost);
 
-
         require(msg.value >= totalCost, "Insufficient funds sent");
 
         totalTokensSold += _amount;
-        pricePerToken += _amount * 0.01 ether; // Price increases by 0.01 ETH per token bought
+        purchases[msg.sender] += _amount; // Track the purchase
+        payments[msg.sender] += totalCost; // Track the payment
+        pricePerToken = pricePerToken + (0.01 ether); // Price increases by 0.01 ETH per transaction
 
         token.transfer(msg.sender, _amount);
 
@@ -54,7 +58,7 @@ contract TokenSale is Ownable {
 
     // Public function to calculate token price based on the linear bonding curve
     function getTokenPrice(uint256 _amount) public view returns (uint256) {
-        return pricePerToken * _amount;
+        return _amount * pricePerToken / 1 ether;
     }
 
     // Function to end the sale and transfer any remaining tokens to the owner
@@ -69,7 +73,10 @@ contract TokenSale is Ownable {
     // Function for the owner to withdraw the funds raised during the sale
     function withdrawFunds() external onlyOwner {
         require(block.timestamp >= releaseTime, "Release time has not passed yet");
-        payable(owner()).transfer(address(this).balance);
+        uint256 balance = address(this).balance;
+        require(balance > 0, "No funds to withdraw");
+        (bool success, ) = owner().call{value: balance}("");
+        require(success, "Transfer failed");
     }
 
     // Function to allow the owner to adjust the price per token (optional)
@@ -80,8 +87,24 @@ contract TokenSale is Ownable {
     // Refund function (buyer can request refund before release time)
     function refund() external {
         require(block.timestamp < releaseTime, "Release time has passed");
-        uint256 amountToRefund = totalTokensSold;
-        totalTokensSold = 0; // Prevent re-entrancy issues
-        token.transfer(msg.sender, amountToRefund);
+        uint256 amountToRefund = purchases[msg.sender];
+        require(amountToRefund > 0, "No tokens to refund");
+        
+        uint256 paymentToReturn = payments[msg.sender];
+        require(paymentToReturn > 0, "No payment to refund");
+        
+        purchases[msg.sender] = 0;
+        payments[msg.sender] = 0;
+        totalTokensSold -= amountToRefund;
+        
+        // Transfer tokens back to the contract
+        require(token.transferFrom(msg.sender, address(this), amountToRefund), "Token transfer failed");
+        
+        // Return the original payment
+        (bool success, ) = msg.sender.call{value: paymentToReturn}("");
+        require(success, "Transfer failed");
     }
+
+    // Fallback function to receive ETH
+    receive() external payable {}
 }
