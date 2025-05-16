@@ -31,7 +31,7 @@ contract TokenTest is Test {
         token.transfer(bob, 1000 * 10**18);
     }
 
-    function testInitialState() public view {
+    function testInitialState() public {
         assertEq(token.name(), "Test Token");
         assertEq(token.symbol(), "TEST");
         assertEq(token.godAddress(), god);

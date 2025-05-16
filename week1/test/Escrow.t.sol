@@ -133,7 +133,8 @@ contract EscrowTest is Test {
         // Ensure the malicious contract can't call withdraw() recursively
         vm.expectRevert("ReentrancyGuard: reentrant call");
         hoax(seller);
-        malicious.call(abi.encodeWithSignature("attack()"));
+        (bool success,) = malicious.call(abi.encodeWithSignature("attack()"));
+        assertFalse(success);
     }
 
     function testFuzz_DepositDifferentAmounts(uint256 amount) public {
@@ -244,4 +245,4 @@ contract MaliciousEscrowAttack {
     function attack() public {
         escrow.withdraw(); // Try to reenter withdraw() function
     }
-}
+} 

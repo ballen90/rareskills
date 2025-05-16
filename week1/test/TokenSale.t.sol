@@ -186,7 +186,6 @@ contract TokenSaleTest is Test {
         tokenSale.buyTokens{value: cost}(amount);
         
         // Record balances before refund
-        uint256 tokenBalanceBefore = token.balanceOf(buyer);
         uint256 ethBalanceBefore = buyer.balance;
         
         // Approve tokens for refund
@@ -221,4 +220,4 @@ contract TokenSaleTest is Test {
         vm.expectRevert("Release time has passed");
         tokenSale.refund();
     }
-}
+} 
