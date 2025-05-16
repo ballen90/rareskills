@@ -2,7 +2,5 @@ out/
 cache/
 *.env
 .DS_Store
-.gitmodules
 build/
 node_modules/
-lib/
